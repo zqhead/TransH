@@ -137,12 +137,13 @@ class H(nn.Module):
         # 在 tensor 的指定维度操作就是对指定维度包含的元素进行操作，如果想要保持结果的维度不变，设置参数keepdim=True即可
         # 如 下面sum中 r_norm * h 结果是一个1024 *50的矩阵（2维张量） sum在dim的结果就变成了 1024的向量（1位张量） 如果想和r_norm对应元素两两相乘
         # 就需要sum的结果也是2维张量 因此需要使用keepdim= True报纸张量的维度不变
-        # 另外关于 dim 等于几表示最开始张量的第几个左括号，具体可以参考这个https://www.cnblogs.com/flix/p/11262606.html
+        # 另外关于 dim 等于几表示张量的第几个维度，从0开始计数，可以理解为张量的最开始的第几个左括号，具体可以参考这个https://www.cnblogs.com/flix/p/11262606.html
         head = h - torch.sum(r_norm * h, dim=1, keepdim=True) * r_norm
         tail = t - torch.sum(r_norm * t, dim=1, keepdim=True) * r_norm
         return self.distance_function(head + r_hyper, tail)
         # return torch.sum(head + r_hyper - tail, dim=1, keepdim=True)
 
+    # 知乎上询问过清华的大佬对于软约束项的建议 模长约束对结果收敛有影响，但是正交约束影响很小.所以模长约束保留，正交约束可以不加
     def scalar(self, entity):
         return torch.sum(torch.relu(torch.norm(entity, p=2, dim=1, keepdim=False) - 1))
 
@@ -235,7 +236,8 @@ class TransH:
                 print("epoch: ", epoch, "cost time: %s" % (round((end - start), 3)))
             print("running loss: ", self.loss)
 
-        # .detach()的作用就是返回一个新的tensor，和原来tensor共享内存
+        # .detach()的作用就是返回一个新的tensor，和原来tensor共享内存，但是这个张量会从计算途中分离出来，并且requires_grad=false
+        # 由于 能被grad的tensor不能直接使用.numpy(), 所以要是用。detach().numpy()
         with codecs.open("TransH_pytorch_entity_" + str(self.dimension) + "dim_batch" + str(batch_size), "w") as f1:
 
             for i, e in enumerate(self.model.entity_embedding.weight):
@@ -255,17 +257,6 @@ class TransH:
                 f3.write(str(i) + "\t")
                 f3.write(str(e.detach().numpy().tolist()))
                 f3.write("\n")
-
-    def norm_l2(self, h, r_norm, r_hyper, t):
-        return torch.norm(h - r_norm.dot(h)*r_norm + r_hyper -(t - r_norm.dot(t)*r_norm))
-
-
-    # 知乎上询问过清华的大佬对于软约束项的建议 模长约束对结果收敛有影响，但是正交约束影响很小所以模长约束保留，正交约束可以不加
-    def scale_entity(self, vector):
-        return torch.relu(torch.sum(vector**2) - 1)
-
-    def orthogonality(self, norm, hyper):
-        return np.dot(norm, hyper)**2/np.linalg.norm(hyper)**2 - self.epsilon**2
 
     def update_triple_embedding(self, correct_sample, corrupted_sample):
         self.optim.zero_grad()
