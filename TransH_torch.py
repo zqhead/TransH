@@ -112,21 +112,24 @@ def norm_l1(h, r, t):
 
 
 class H(nn.Module):
-    def __init__(self, entity_num, relation_num, dimension, margin, C):
+    def __init__(self, entity_num, relation_num, dimension, margin, C, epsilon):
         super(H, self).__init__()
         self.dimension = dimension
         self.margin = margin
         self.C = C
-
+        self.entity_num = entity_num
+        self.relation_num = relation_num
+        self.epsilon = epsilon
 
         self.relation_norm_embedding = torch.nn.Embedding(num_embeddings=relation_num,
-                                                          embedding_dim=self.dimension).requires_grad_(True)
+                                                          embedding_dim=self.dimension)
         self.relation_hyper_embedding = torch.nn.Embedding(num_embeddings=relation_num,
-                                                           embedding_dim=self.dimension).requires_grad_(True)
+                                                           embedding_dim=self.dimension)
         self.entity_embedding = torch.nn.Embedding(num_embeddings=entity_num,
-                                                           embedding_dim=self.dimension).requires_grad_(True)
-        self.loss_F = nn.MarginRankingLoss(self.margin, reduction="sum")
-        self.distance_function = nn.PairwiseDistance(2)
+                                                           embedding_dim=self.dimension)
+        self.loss_F = nn.MarginRankingLoss(self.margin, reduction="mean")
+        # pairwiseDIstance 用于计算成批成对的两个向量之间的距离（差值），具体的距离为 Lp范数，参数P定义了使用第几范数，默认为L2
+        self.distance_function = nn.PairwiseDistance(p=2)
 
     def normalization_norm_relations(self):
         norm = self.relation_norm_embedding.weight.detach().cpu().numpy()
@@ -143,9 +146,9 @@ class H(nn.Module):
         return self.distance_function(head + r_hyper, tail)
         # return torch.sum(head + r_hyper - tail, dim=1, keepdim=True)
 
-    # 知乎上询问过清华的大佬对于软约束项的建议 模长约束对结果收敛有影响，但是正交约束影响很小.所以模长约束保留，正交约束可以不加
-    def scalar(self, entity):
-        return torch.sum(torch.relu(torch.norm(entity, p=2, dim=1, keepdim=False) - 1))
+
+    # def scalar(self, entity):
+    #     return torch.sum(torch.relu(torch.norm(entity, p=2, dim=1, keepdim=False) - 1))
 
     def forward(self, current_triples, corrupted_triples):
         h, t, r = torch.chunk(current_triples, 3, dim=1)
@@ -164,12 +167,19 @@ class H(nn.Module):
         neg = self.distance(corrupted_head, r_norm, r_hyper, corrupted_tail)
 
         # loss_F = max(0, -y*(x1-x2) + margin)
-        loss1 = torch.sum(torch.relu(pos - neg + self.margin))
-        loss = self.loss_F(neg, pos, torch.ones(1))\
-                  + self.C * (self.scalar(head) + self.scalar(tail) + self.scalar(corrupted_head) + self.scalar(corrupted_tail))
+        # 知乎上询问过清华的大佬对于软约束项的建议 模长约束对结果收敛有影响，但是正交约束影响很小.所以模长约束保留，正交约束可以不加
+
+        entityLoss = torch.sum(F.relu(torch.norm(self.entity_embedding.weight, p=2, dim=1, keepdim=False) - 1))
+        # orthLoss = torch.sum(F.relu(torch.sum(self.relation_norm_embedding.weight * self.relation_hyper_embedding.weight, dim=1, keepdim=False) / \
+        #             torch.norm(self.relation_hyper_embedding.weight, p=2, dim=1, keepdim=False) - self.epsilon ** 2)) / self.relation_num
+        # return marginLoss / size + self.C * (entityLoss / self.entnum + orthLoss / self.relnum)
+        loss = self.loss_F(neg, pos, torch.ones(1))/len(current_triples)
+        marginLoss = torch.sum(F.relu(input=pos - neg + self.margin))
+        # loss1 = torch.sum(torch.relu(pos - neg + self.margin))
+                # + self.C * (self.scalar(head) + self.scalar(tail) + self.scalar(corrupted_head) + self.scalar(corrupted_tail))
                 # + self.C * (torch.sum(F.relu(torch.norm(self.entity_embedding.weight, p=2, dim=1, keepdim=False) - 1)))
-        print(loss1, loss)
-        return torch.sum(loss)
+        # print(loss, marginLoss)
+        return loss + self.C *(entityLoss)
 
 
 
@@ -191,11 +201,11 @@ class TransH:
 
 
     def data_initialise(self):
-        self.model = H(len(self.entities), len(self.relations), self.dimension, self.margin, self.C)
+        self.model = H(len(self.entities), len(self.relations), self.dimension, self.margin, self.C, self.epsilon)
         self.optim = optim.SGD(self.model.parameters(), lr=self.learning_rate)
 
 
-    def training_run(self, epochs=1, nbatches=100):
+    def training_run(self, epochs=300, nbatches=100):
 
         batch_size = int(len(self.triples) / nbatches)
         print("batch size: ", batch_size)
@@ -232,9 +242,9 @@ class TransH:
                 current = torch.from_numpy(np.array(current)).long()
                 corrupted =  torch.from_numpy(np.array(corrupted)).long()
                 self.update_triple_embedding(current, corrupted)
-                end = time.time()
-                print("epoch: ", epoch, "cost time: %s" % (round((end - start), 3)))
-            print("running loss: ", self.loss)
+            end = time.time()
+            print("epoch: ", epoch, "cost time: %s" % (round((end - start), 3)))
+            print("running loss: ", self.loss/nbatches)
 
         # .detach()的作用就是返回一个新的tensor，和原来tensor共享内存，但是这个张量会从计算途中分离出来，并且requires_grad=false
         # 由于 能被grad的tensor不能直接使用.numpy(), 所以要是用。detach().numpy()
@@ -261,7 +271,6 @@ class TransH:
     def update_triple_embedding(self, correct_sample, corrupted_sample):
         self.optim.zero_grad()
         loss = self.model(correct_sample, corrupted_sample)
-        print(loss)
         self.loss += loss
         loss.backward()
         self.optim.step()
