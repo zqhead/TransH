@@ -3,8 +3,11 @@ import operator # operator模块输出一系列对应Python内部操作符的函
 import numpy as np
 import codecs
 import threading
+import torch
+import time
 
-from TransH import data_loader,entity2id,relation2id
+
+from TransH_torch import dataloader,entities2id,relations2id
 
 
 def test_data_loader(entity_embedding_file, norm_relation_embedding_file, hyper_relation_embedding_file, test_data_file):
@@ -27,19 +30,19 @@ def test_data_loader(entity_embedding_file, norm_relation_embedding_file, hyper_
             line = line.strip().split('\t')
             if len(line) != 2:
                 continue
-            entity_dic[line[0]] = json.loads(line[1])
+            entity_dic[int(line[0])] = json.loads(line[1])
 
         for line in lines2:
             line = line.strip().split('\t')
             if len(line) != 2:
                 continue
-            norm_relation[line[0]] = json.loads(line[1])
+            norm_relation[int(line[0])] = json.loads(line[1])
 
         for line in lines3:
             line = line.strip().split('\t')
             if len(line) != 2:
                 continue
-            hyper_relation[line[0]] = json.loads(line[1])
+            hyper_relation[int(line[0])] = json.loads(line[1])
 
     with codecs.open(file4, 'r') as f4:
         content = f4.readlines()
@@ -48,11 +51,12 @@ def test_data_loader(entity_embedding_file, norm_relation_embedding_file, hyper_
             if len(triple) != 3:
                 continue
 
-            head = entity2id[triple[0]]
-            tail = entity2id[triple[1]]
-            relation = relation2id[triple[2]]
+            head = int(entities2id[triple[0]])
+            relation = int(relations2id[triple[1]])
+            tail = int(entities2id[triple[2]])
 
-            triple_list.append([head, tail, relation])
+
+            triple_list.append([head, relation, tail])
 
     print("Complete load. entity : %d , relation : %d , triple : %d" % (
         len(entity_dic), len(norm_relation), len(triple_list)))
@@ -60,75 +64,104 @@ def test_data_loader(entity_embedding_file, norm_relation_embedding_file, hyper_
     return entity_dic, norm_relation, hyper_relation, triple_list
 
 
-class MyThread(threading.Thread):
-    """重写多线程，使其能够返回值"""
-
-    def __init__(self, target=None, args=()):
-        super(MyThread, self).__init__()
-        self.func = target
-        self.args = args
-
-    def run(self):
-        self.result = self.func(*self.args)
-
-    def get_result(self):
-        try:
-            return self.result  # 如果子线程不使用join方法，此处可能会报没有self.result的错误
-        except Exception:
-            return None
 
 class testTransH:
-    def __init__(self, entities_dict, norm_relation, hyper_relation, test_triple_list, train_triple_list, filter_triple=False, n=2500 ,norm=1):
+    def __init__(self, entities_dict, norm_relation, hyper_relation, test_triple_list, train_triple_list, valid_triple, filter_triple=False ,norm=1):
         self.entities = entities_dict
         self.norm_relation = norm_relation
         self.hyper_relation = hyper_relation
         self.test_triples = test_triple_list
+        self.valid_triples = valid_triple
         self.train_triples = train_triple_list
         self.filter = filter_triple
         self.norm = norm
-        self.n = n
         self.mean_rank = 0
         self.hit_10 = 0
 
-    def test_theading(self, test_triple):
+
+    def test_run(self):
+
         hits = 0
         rank_sum = 0
         num = 0
 
-        for triple in test_triple:
+        for triple in self.test_triples:
+            start = time.time()
             num += 1
             print(num, triple)
             rank_head_dict = {}
             rank_tail_dict = {}
             #
-            for entity in self.entities.keys():
+            head_embedding = []
+            tail_embedding = []
+            norm_relation = []
+            hyper_relation = []
+            tamp = []
+
+            head_filter = []
+            tail_filter = []
+            if self.filter:
+
+                for tr in self.train_triples:
+                    if tr[1] == triple[1] and tr[2] == triple[2] and tr[0] != triple[0]:
+                        head_filter.append(tr)
+                    if tr[0] == triple[0] and tr[1] == triple[1] and tr[2] != triple[2]:
+                        tail_filter.append(tr)
+                for tr in self.test_triples:
+                    if tr[1] == triple[1] and tr[2] == triple[2] and tr[0] != triple[0]:
+                        head_filter.append(tr)
+                    if tr[0] == triple[0] and tr[1] == triple[1] and tr[2] != triple[2]:
+                        tail_filter.append(tr)
+                for tr in self.valid_triples:
+                    if tr[1] == triple[1] and tr[2] == triple[2] and tr[0] != triple[0]:
+                        head_filter.append(tr)
+                    if tr[0] == triple[0] and tr[1] == triple[1] and tr[2] != triple[2]:
+                        tail_filter.append(tr)
+
+            for i, entity in enumerate(self.entities.keys()):
+
                 head_triple = [entity, triple[1], triple[2]]
                 if self.filter:
-                    if head_triple in self.train_triples:
+                    if head_triple in head_filter:
                         continue
-                head_embedding = self.entities[head_triple[0]]
-                tail_embedding = self.entities[head_triple[1]]
-                norm_relation = self.norm_relation[head_triple[2]]
-                hyper_relation = self.hyper_relation[head_triple[2]]
-                distance = self.distance(head_embedding, norm_relation,hyper_relation, tail_embedding)
-                rank_head_dict[tuple(head_triple)] = distance
+                head_embedding.append(self.entities[head_triple[0]])
+                tail_embedding.append(self.entities[head_triple[2]])
+                norm_relation.append(self.norm_relation[head_triple[1]])
+                hyper_relation.append(self.hyper_relation[head_triple[1]])
+                tamp.append(tuple(head_triple))
 
-            for tail in self.entities.keys():
-                tail_triple = [triple[0], tail, triple[2]]
+            distance = self.distance(head_embedding, norm_relation, hyper_relation, tail_embedding)
+
+            for i in range(len(tamp)):
+                rank_head_dict[tamp[i]] = distance[i]
+
+            head_embedding = []
+            tail_embedding = []
+            norm_relation = []
+            hyper_relation = []
+            tamp = []
+
+            for i, tail in enumerate(self.entities.keys()):
+
+                tail_triple = [triple[0], triple[1], tail]
                 if self.filter:
-                    if tail_triple in self.train_triples:
+                    if tail_triple in tail_filter:
                         continue
-                head_embedding = self.entities[tail_triple[0]]
-                tail_embedding = self.entities[tail_triple[1]]
-                norm_relation = self.norm_relation[tail_triple[2]]
-                hyper_relation = self.hyper_relation[tail_triple[2]]
-                distance = self.distance(head_embedding, norm_relation, hyper_relation, tail_embedding)
-                rank_tail_dict[tuple(tail_triple)] = distance
+                head_embedding.append(self.entities[tail_triple[0]])
+                norm_relation.append(self.norm_relation[tail_triple[1]])
+                hyper_relation.append(self.hyper_relation[tail_triple[1]])
+                tail_embedding.append(self.entities[tail_triple[2]])
+                tamp.append(tuple(tail_triple))
+
+            distance = self.distance(head_embedding, norm_relation, hyper_relation, tail_embedding)
+            for i in range(len(tamp)):
+                rank_tail_dict[tamp[i]] = distance[i]
 
             # itemgetter 返回一个可调用对象，该对象可以使用操作__getitem__()方法从自身的操作中捕获item
             # 使用itemgetter()从元组记录中取回特定的字段 搭配sorted可以将dictionary根据value进行排序
             # sort 是应用在 list 上的方法，sorted 可以对所有可迭代的对象进行排序操作。
             '''
+    
             sorted(iterable, cmp=None, key=None, reverse=False)
             参数说明：
             iterable -- 可迭代对象。
@@ -136,11 +169,13 @@ class testTransH:
             key -- 主要是用来进行比较的元素，只有一个参数，具体的函数的参数就是取自于可迭代对象中，指定可迭代对象中的一个元素来进行排序。
             reverse -- 排序规则，reverse = True 降序 ， reverse = False 升序（默认）。
             '''
+
             rank_head_sorted = sorted(rank_head_dict.items(), key=operator.itemgetter(1), reverse=False)
             rank_tail_sorted = sorted(rank_tail_dict.items(), key=operator.itemgetter(1), reverse=False)
 
             # calculate the mean_rank and hit_10
             # head data
+            i = 0
             for i in range(len(rank_head_sorted)):
                 if triple[0] == rank_head_sorted[i][0][0]:
                     if i < 10:
@@ -149,39 +184,16 @@ class testTransH:
                     break
 
             # tail rank
+            i = 0
             for i in range(len(rank_tail_sorted)):
-                if triple[1] == rank_tail_sorted[i][0][1]:
+                if triple[2] == rank_tail_sorted[i][0][2]:
                     if i < 10:
                         hits += 1
                     rank_sum = rank_sum + i + 1
                     break
-        return hits, rank_sum
-
-
-    def test_run(self):
-        hits = 0
-        rank_sum = 0
-        num = 0
-
-        test_list = [self.test_triples[i: i+self.n] for i in range(0, len(self.test_triples), self.n) ]
-
-        threads = []
-        for T_list in test_list:  # 循环创建500个线程
-            t = MyThread(target=self.test_theading, args=(T_list,))
-            threads.append(t)
-
-        for t in threads:
-            t.setDaemon(True)  # 设置为守护线程，不会因主线程结束而中断
-            t.start()
-
-        for t in threads:
-            t.join()  # 子线程全部加入，主线程等所有子线程运行完毕
-
-        for t in threads:
-            hit, rank = t.get_result()
-            hits += hit
-            rank_sum += rank
-
+            end = time.time()
+            print("epoch: ", num, "cost time: %s" % (round((end - start), 3)), str(hits / (2 * num)),
+                  str(rank_sum / (2 * num)))
         self.hit_10 = hits / (2 * len(self.test_triples))
         self.mean_rank = rank_sum / (2 * len(self.test_triples))
 
@@ -189,31 +201,42 @@ class testTransH:
 
 
     def distance(self, h, r_norm, r_hyper, t):
-        head = np.array(h)
-        norm = np.array(r_norm)
-        hyper = np.array(r_hyper)
-        tail = np.array(t)
-        h_hyper = head - np.dot(norm, head) * norm
-        t_hyper = tail - np.dot(norm, tail) * norm
-        d = h_hyper + hyper - t_hyper
-        return np.sum(np.square(d))
+        head = torch.from_numpy(np.array(h))
+        rel_norm = torch.from_numpy(np.array(r_norm))
+        rel_hyper = torch.from_numpy(np.array(r_hyper))
+        tail = torch.from_numpy(np.array(t))
+
+        h_hyper = head - torch.sum(head * rel_norm, dim = 1, keepdim=True) * rel_norm
+        t_hyper = tail - torch.sum(tail * rel_norm, dim = 1, keepdim=True) * rel_norm
+
+        distance = h_hyper + rel_hyper - t_hyper
+        score = torch.norm(distance, p=self.norm, dim=1)
+        return score.numpy()
 
 
 
 if __name__ == "__main__":
-    _, _, train_triple = data_loader("FB15k\\")
 
-    entity, norm_relation, hyper_relation, test_triple = test_data_loader("TransH_pytorch_entity_50dim_batch4831",
-                                                               "TransH_pytorch_norm_relations_50dim_batch4831",
-                                                               "TransH_pytorch_hyper_relations_50dim_batch4831",
-                                                               "FB15k\\test.txt")
+    file1 = "WN18\\wordnet-mlj12-test.txt"
+    file2 = "WN18\\entity2id.txt"
+    file3 = "WN18\\relation2id.txt"
+    file4 = "WN18\\wordnet-mlj12-valid.txt"
+    entity_set, relation_set, train_triple, valid_triple = dataloader(file1, file2, file3, file4)
 
-    test = testTransH(entity, norm_relation, hyper_relation, test_triple, train_triple, filter_triple=False, n=2500, norm=2)
+    file5 = "WN18_500epoch_TransH_pytorch_entity_50dim_batch1200"
+    file6 = "WN18_500epoch_TransH_pytorch_norm_relations_50dim_batch1200"
+    file7 = "WN18_500epoch_TransH_pytorch_hyper_relations_50dim_batch1200"
+    file8 = "WN18\\wordnet-mlj12-train.txt"
+
+    entity, norm_relation, hyper_relation, test_triple = test_data_loader(file5, file6, file7, file8)
+
+    test = testTransH(entity, norm_relation, hyper_relation, test_triple, train_triple, valid_triple, filter_triple=False, norm=2)
     hit10, mean_rank = test.test_run()
     print("raw entity hits@10: ", hit10)
     print("raw entity meanrank: ",mean_rank)
 
-    # test2 = testTransH(entity, norm_relation, hyper_relation, test_triple, train_triple, filter_triple=True, n=2500, norm=2)
+    # test2 = testTransH(entity, norm_relation, hyper_relation, test_triple, train_triple, valid_triple,
+    #                   filter_triple=True, norm=2)
     # filter_hit10, filter_mean_rank = test2.test_run()
     # print("filter entity hits@10: ", filter_hit10)
     # print("filter entity meanrank: ", filter_mean_rank)
