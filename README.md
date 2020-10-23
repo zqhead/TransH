@@ -13,8 +13,8 @@ TransH_torch.py 中完全使用pytorch实现transR模型，以及测试功能，
 WN18:
 |    |raw|fil|          
 |----|----|----|
-|	   |MR \ hit10|MR\ hit10| 
-|TransH|253\ 0.6719 |242\ 0.768|  
+|	   | MR    hit10  | MR    hit10 | 
+|TransH| 253   0.6719 | 242    0.768 |  
 
 FB15K:
     |                |    raw           |           fil|
