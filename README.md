@@ -10,9 +10,8 @@ TransH_torch.py 中完全使用pytorch实现transR模型，以及测试功能，
 
 # TransH_torch.py Test_result
 |                   | WN18 |                                      FB15k|
-|  ----  | ----  |----  |
+
  |                | raw |            fil    |                  raw     |                 fil|
- |  ----  | ----  |----  | ----  |----  |
 |	         |   MR |   hit10|        MR|     hit10  |      MR|      hit10   |      MR   |   hit10|
  |  ----  | ----  |----  | ----  |----  | ----  |----  | ----  |----  |
 |TransH  |     253   | 0.6719     |  242 |   0.768   |    327     |  0.457        | 188     |  0.663|
