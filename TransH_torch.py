@@ -610,42 +610,42 @@ class TransH:
 
 
 if __name__ == '__main__':
-    file1 = "WN18\\wordnet-mlj12-train.txt"
-    file2 = "WN18\\entity2id.txt"
-    file3 = "WN18\\relation2id.txt"
-    file4 = "WN18\\wordnet-mlj12-valid.txt"
+    # file1 = "WN18\\wordnet-mlj12-train.txt"
+    # file2 = "WN18\\entity2id.txt"
+    # file3 = "WN18\\relation2id.txt"
+    # file4 = "WN18\\wordnet-mlj12-valid.txt"
 
-    # file1 = "FB15k\\freebase_mtr100_mte100-train.txt"
-    # file2 = "FB15k\\entity2id.txt"
-    # file3 = "FB15k\\relation2id.txt"
-    # file4 = "FB15k\\freebase_mtr100_mte100-valid.txt"
+    file1 = "FB15k\\freebase_mtr100_mte100-train.txt"
+    file2 = "FB15k\\entity2id.txt"
+    file3 = "FB15k\\relation2id.txt"
+    file4 = "FB15k\\freebase_mtr100_mte100-valid.txt"
     entity_set, relation_set, triple_list, valid_triple_list = dataloader(file1, file2, file3, file4)
 
     # file5 = ""
     # file6 = ""
     # file7 = ""
 
-    file5 = "WN18_1epoch_TransH_pytorch_entity_50dim_batch4800"
-    file6 = "WN18_1epoch_TransH_pytorch_norm_relations_50dim_batch4800"
-    file7 = "WN18_1epoch_TransH_pytorch_hyper_relations_50dim_batch4800"
-    file8 = "WN18\\wordnet-mlj12-test.txt"
-    file9 = "Fb15k_loss_record.txt"
-    transH = TransH(entity_set, relation_set, triple_list, embedding_dim=50, lr=0.005, margin=4.0, norm=1, C=0.25, epsilon=1e-5, valid_triple_list = valid_triple_list)
-    transH.data_initialise()
-    transH.insert_data(file5, file6, file7, file8, file9)
-    # transH.training_run(epochs=500, batch_size=4800, out_file_title="WN18_1epoch_")
-    transH.test_run(filter = False)
-
-
-    # file5 = "FB15k_200epoch_TransH_pytorch_entity_100dim_batch4800"
-    # file6 = "FB15k_200epoch_TransH_pytorch_norm_relations_100dim_batch4800"
-    # file7 = "FB15k_200epoch_TransH_pytorch_hyper_relations_100dim_batch4800"
-    # file8 = "FB15k\\freebase_mtr100_mte100-test.txt"
+    # file5 = "WN18_1epoch_TransH_pytorch_entity_50dim_batch4800"
+    # file6 = "WN18_1epoch_TransH_pytorch_norm_relations_50dim_batch4800"
+    # file7 = "WN18_1epoch_TransH_pytorch_hyper_relations_50dim_batch4800"
+    # file8 = "WN18\\wordnet-mlj12-test.txt"
     # file9 = "Fb15k_loss_record.txt"
-    # transH = TransH(entity_set, relation_set, triple_list, embedding_dim=100, lr=0.005, margin=0.25, norm=1, C=1.0, epsilon=1e-5, valid_triple_list = valid_triple_list)
+    # transH = TransH(entity_set, relation_set, triple_list, embedding_dim=50, lr=0.005, margin=4.0, norm=1, C=0.25, epsilon=1e-5, valid_triple_list = valid_triple_list)
     # transH.data_initialise()
     # transH.insert_data(file5, file6, file7, file8, file9)
-    # transH.training_run(epochs=50, batch_size=4800, out_file_title="FB15k_200epoch_")
+    # # transH.training_run(epochs=500, batch_size=4800, out_file_title="WN18_1epoch_")
+    # transH.test_run(filter = False)
+
+
+    file5 = "FB15k_50epoch_TransH_pytorch_entity_200dim_batch1200"
+    file6 = "FB15k_50epoch_TransH_pytorch_norm_relations_200dim_batch1200"
+    file7 = "FB15k_50epoch_TransH_pytorch_hyper_relations_200dim_batch1200"
+    file8 = "FB15k\\freebase_mtr100_mte100-test.txt"
+    file9 = "Fb15k_loss_record.txt"
+    transH = TransH(entity_set, relation_set, triple_list, embedding_dim=200, lr=0.001, margin=8.0, norm=1, C=1.0, epsilon=1e-5, valid_triple_list = valid_triple_list)
+    transH.data_initialise()
+    # transH.insert_data(file5, file6, file7, file8, file9)
+    transH.training_run(epochs=50, batch_size=1200, out_file_title="FB15k_50epoch_")
     # transH.test_run(filter = False)
 
 
