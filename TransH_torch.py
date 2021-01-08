@@ -392,7 +392,7 @@ class TransH:
                             relation_tph[int(corrupted_sample[1])] + relation_hpt[int(corrupted_sample[1])])
 
                     '''
-                    这里关于p的说明 tph 表示每一个头结对应的平均尾节点数 hpt 表示每一个尾节点对应的平均头结点数
+                    这里关于p的说明 tph 表示每一个头实体对应的平均尾实体数 hpt 表示每一个尾实体对应的平均头实体数
                     当tph > hpt 时 更倾向于替换头 反之则跟倾向于替换尾实体
                     
                     举例说明 
@@ -644,9 +644,9 @@ if __name__ == '__main__':
     file9 = "Fb15k_loss_record.txt"
     transH = TransH(entity_set, relation_set, triple_list, embedding_dim=200, lr=0.001, margin=8.0, norm=1, C=1.0, epsilon=1e-5, valid_triple_list = valid_triple_list)
     transH.data_initialise()
-    # transH.insert_data(file5, file6, file7, file8, file9)
-    transH.training_run(epochs=50, batch_size=1200, out_file_title="FB15k_50epoch_")
-    # transH.test_run(filter = False)
+    transH.insert_data(file5, file6, file7, file8, file9)
+    # transH.training_run(epochs=50, batch_size=1200, out_file_title="FB15k_50epoch_")
+    transH.test_run(filter = False)
 
 
 
